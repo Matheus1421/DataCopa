@@ -17,9 +17,9 @@ graph LR
     PY[Python Extraction]
     
     %% Azure Data Lakehouse
-    ADLS[(Azure Data Lake\nStorage Gen2)]
-    DBX((Azure Databricks\nApache Spark))
-    SYN{Azure Synapse\nAnalytics}
+    ADLS[(Azure Data Lake<br>Storage Gen2)]
+    DBX((Azure Databricks<br>Apache Spark))
+    SYN{Azure Synapse<br>Analytics}
     
     %% Serving
     STR[Streamlit Dashboard]
@@ -29,7 +29,7 @@ graph LR
     APIF -->|Dynamic JSONs| PY
     PY -->|Raw Upload| ADLS
     
-    ADLS <-->|PySpark ETL\n(Bronze/Silver/Gold)| DBX
+    ADLS <-->|PySpark ETL<br>Bronze/Silver/Gold| DBX
     
     ADLS -->|Read Curated Parquet| SYN
     SYN -->|SQL Queries| STR
