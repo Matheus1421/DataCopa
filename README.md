@@ -1,4 +1,4 @@
-# 🏆 DataCopa: Brazil's World Cup Legacy 🇧🇷
+# 🏆 DataCopa: Brazil's World Cup Legacy 
 
 ## 📖 Overview
 The **DataCopa Pipeline** is an end-to-end Data Engineering project dedicated to analyzing the historical and statistical performance of the **Brazilian National Team** across FIFA World Cup history. 
