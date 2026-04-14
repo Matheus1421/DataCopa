@@ -1,13 +1,12 @@
-# 🏆 DataCopa Pipeline: Modern Data Lakehouse
+# 🇧🇷 DataCopa: Brazil's World Cup Legacy Pipeline
 
 ## 📖 Overview
-The **DataCopa Pipeline** is an end-to-end Data Engineering project designed to ingest, process, and serve historical and dynamic data from the FIFA World Cup. 
+The **DataCopa Pipeline** is an end-to-end Data Engineering project dedicated to analyzing the historical and statistical performance of the **Brazilian National Team** across FIFA World Cup history. 
 
-This project demonstrates the implementation of a **Modern Data Lakehouse architecture** using the **Microsoft Azure** ecosystem and **Apache Spark**, following the Medallion architecture (Bronze, Silver, and Gold layers).
+By implementing a **Modern Data Lakehouse** architecture on **Microsoft Azure**, this pipeline ingests historical datasets and dynamic API feeds to provide deep insights into goals, match results, and historical trends of the only five-time world champions.
 
 ## 🏗️ Architecture
-
-The data flows through a batch processing pipeline, extracting both structured (CSV) and semi-structured (JSON) data, transforming it via PySpark, and serving it for analytics.
+The project follows the **Medallion Architecture** (Bronze, Silver, and Gold layers), ensuring high data quality and reliability through each stage of the transformation process.
 
 ```mermaid
 graph LR
