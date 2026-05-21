@@ -13,32 +13,33 @@ graph LR
     %% Data Sources
     KGL[Kaggle API]
     APIF[API-Football]
-    PY[Python Extraction]
     
-    %% Azure Data Lakehouse
-    ADLS[(Azure Data Lake<br>Storage Gen2)]
-    DBX((Azure Databricks<br>Apache Spark))
-    SYN{Azure Synapse<br>Analytics}
+    %% Storage Layers (Local)
+    RAW[(Local: data/raw/<br>JSON & CSV)]
+    PROC[(Local: data/processed/<br>Parquet)]
     
-    %% Serving
+    %% Processing & UI
+    PY_EXT[Python Extraction]
+    PD((Pandas ETL))
     STR[Streamlit Dashboard]
 
     %% Flow
-    KGL -->|Historical CSVs| PY
-    APIF -->|Dynamic JSONs| PY
-    PY -->|Raw Upload| ADLS
+    KGL -->|Historical CSVs| PY_EXT
+    APIF -->|Dynamic JSONs| PY_EXT
+    PY_EXT -->|Save| RAW
     
-    ADLS <-->|PySpark ETL<br>Bronze/Silver/Gold| DBX
+    RAW -->|Read| PD
+    PD -->|Clean & Filter Brazil| PROC
     
-    ADLS -->|Read Curated Parquet| SYN
-    SYN -->|SQL Queries| STR
+    PROC -->|Load Local Data| STR
 
-    classDef python fill:#306998,stroke:#FFD43B,stroke-width:2px,color:white;
-    classDef azure fill:#0078D4,stroke:#005A9E,stroke-width:2px,color:white;
-    classDef databricks fill:#FF3621,stroke:#C21A06,stroke-width:2px,color:white;
+    %% Styles
+    classDef source fill:#306998,stroke:#FFD43B,stroke-width:2px,color:white;
+    classDef storage fill:#3F8624,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef process fill:#E25A1C,stroke:#232F3E,stroke-width:2px,color:white;
     classDef frontend fill:#FF4B4B,stroke:#7D2A2A,stroke-width:2px,color:white;
     
-    class PY python;
-    class ADLS,SYN azure;
-    class DBX databricks;
+    class KGL,APIF,PY_EXT source;
+    class RAW,PROC storage;
+    class PD process;
     class STR frontend;
