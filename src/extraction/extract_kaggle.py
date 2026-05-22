@@ -14,7 +14,6 @@ def extrair_dados_historicos():
     pasta_destino = os.path.join(diretorio_raiz, "data", "raw")
     os.makedirs(pasta_destino, exist_ok=True)
 
-    print("🔐 Autenticando na API do Kaggle...")
     api = KaggleApi()
     api.authenticate()
 
