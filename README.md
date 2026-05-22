@@ -1,43 +1,38 @@
-# 🏆 DataCopa: Brazil's World Cup Legacy 
+# 🏆 DataCopa: O Legado da Seleção Canarinho 🇧🇷
 
-## 📖 Overview
-The **DataCopa Pipeline** is an end-to-end Data Engineering project dedicated to analyzing the historical and statistical performance of the **Brazilian National Team** across FIFA World Cup history. 
+## 📖 Visão Geral
+O **DataCopa** é um projeto de Ciência de Dados e Machine Learning de ponta a ponta projetado para analisar, extrair padrões e modelar estatisticamente o desempenho da **Seleção Brasileira** nas cinco edições de Copa do Mundo em que se sagrou campeã (1958, 1962, 1970, 1994 e 2002).
 
-## 🏗️ Architecture
-The project follows the **Medallion Architecture** (Bronze, Silver, and Gold layers), ensuring high data quality and reliability through each stage of the transformation process.
+A partir de dados históricos estruturados, o projeto une a Engenharia de Dados local (ETL) ao desenvolvimento de modelos preditivos e descritivos para responder: *o que matematicamente definiu o DNA das gerações campeãs do Brasil?*
+
+## 🏗️ Arquitetura do Projeto
+O pipeline foi desenhado seguindo uma abordagem *lightweight* (leve) e totalmente local, priorizando a eficiência do código e eliminando a complexidade de infraestruturas em nuvem desnecessárias para o volume atual de dados.
 
 ```mermaid
 graph LR
-    %% Data Sources
+    %% Fontes de Dados
     KGL[Kaggle API]
-    APIF[API-Football]
     
-    %% Storage Layers (Local)
-    RAW[(Local: data/raw/<br>JSON & CSV)]
-    PROC[(Local: data/processed/<br>Parquet)]
+    %% Camadas de Armazenamento Local
+    RAW[(Local: data/raw/<br>CSVs Originais)]
+    PROC[(Local: data/processed/<br>Parquet Otimizado)]
+    MODELS[(Local: models/<br>Modelos Treinados .pkl)]
     
-    %% Processing & UI
-    PY_EXT[Python Extraction]
+    %% Processamento e Interface
+    PY_EXT[Extração Python]
     PD((Pandas ETL))
-    STR[Streamlit Dashboard]
+    SKL((Scikit-Learn ML))
+    STR[Dashboard Streamlit]
 
-    %% Flow
-    KGL -->|Historical CSVs| PY_EXT
-    APIF -->|Dynamic JSONs| PY_EXT
-    PY_EXT -->|Save| RAW
+    %% Fluxo de Dados
+    KGL -->|Download de CSVs| PY_EXT
+    PY_EXT -->|Armazena| RAW
     
-    RAW -->|Read| PD
-    PD -->|Clean & Filter Brazil| PROC
+    RAW -->|Leitura e Filtros| PD
+    PD -->|Feature Engineering| PROC
     
-    PROC -->|Load Local Data| STR
-
-    %% Styles
-    classDef source fill:#306998,stroke:#FFD43B,stroke-width:2px,color:white;
-    classDef storage fill:#3F8624,stroke:#232F3E,stroke-width:2px,color:white;
-    classDef process fill:#E25A1C,stroke:#232F3E,stroke-width:2px,color:white;
-    classDef frontend fill:#FF4B4B,stroke:#7D2A2A,stroke-width:2px,color:white;
+    PROC -->|Treinamento| SKL
+    SKL -->|Salva Artefato| MODELS
     
-    class KGL,APIF,PY_EXT source;
-    class RAW,PROC storage;
-    class PD process;
-    class STR frontend;
+    PROC -->|Consome Dados| STR
+    MODELS -->|Consome Modelo| STR
