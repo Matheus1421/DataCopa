@@ -88,14 +88,10 @@ http://localhost:8501
 ```
 
 ---
-
 ## 📁 Estrutura do Projeto
 
 ```text
 copa-dados-pipeline/
-├── .streamlit/              # Configurações visuais do Streamlit
-│   └── config.toml
-│
 ├── data/
 │   ├── raw/                 # Dados brutos
 │   └── processed/           # Dados tratados pelo pipeline
