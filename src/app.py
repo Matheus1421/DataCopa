@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.graph_objects as go
+import zipfile
+from dotenv import load_dotenv
 
 st.set_page_config(
     page_title="Raio-X da Seleção",
@@ -28,6 +30,119 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ==================== EXTRACT ====================
+@st.cache_data
+def extrair_dados_kaggle():
+    """Extrai dados do Kaggle se não existirem localmente"""
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        
+        diretorio_script = os.path.dirname(os.path.abspath(__file__))
+        diretorio_raiz = os.path.abspath(os.path.join(diretorio_script, ".."))
+        pasta_raw = os.path.join(diretorio_raiz, "data", "raw")
+        
+        os.makedirs(pasta_raw, exist_ok=True)
+        
+        # Verifica se os arquivos já existem
+        arquivos_necessarios = ["WorldCupMatches.csv", "WorldCupPlayers.csv", "WorldCups.csv"]
+        if all(os.path.exists(os.path.join(pasta_raw, f)) for f in arquivos_necessarios):
+            return True
+        
+        # Carrega variáveis de ambiente e autentica com Kaggle
+        load_dotenv(os.path.join(diretorio_raiz, ".env"))
+        api = KaggleApi()
+        api.authenticate()
+        
+        # Download do dataset
+        dataset_slug = "abecklas/fifa-world-cup"
+        api.dataset_download_files(dataset_slug, path=pasta_raw)
+        
+        # Descompacta
+        nome_zip = dataset_slug.split('/')[-1] + ".zip"
+        caminho_zip = os.path.join(pasta_raw, nome_zip)
+        if os.path.exists(caminho_zip):
+            with zipfile.ZipFile(caminho_zip, 'r') as zip_ref:
+                zip_ref.extractall(pasta_raw)
+            os.remove(caminho_zip)
+        
+        return True
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível fazer download do Kaggle: {e}")
+        return False
+
+# ==================== TRANSFORM ====================
+@st.cache_data
+def transformar_dados():
+    """Faz o ETL completo dos dados de Brasil"""
+    diretorio_script = os.path.dirname(os.path.abspath(__file__))
+    diretorio_raiz = os.path.abspath(os.path.join(diretorio_script, ".."))
+    pasta_raw = os.path.join(diretorio_raiz, "data", "raw")
+    pasta_processed = os.path.join(diretorio_raiz, "data", "processed")
+    
+    os.makedirs(pasta_processed, exist_ok=True)
+    
+    # Carrega dados brutos
+    df_matches = pd.read_csv(f"{pasta_raw}/WorldCupMatches.csv")
+    df_players = pd.read_csv(f"{pasta_raw}/WorldCupPlayers.csv")
+    
+    # Limpa dados
+    colunas_excluidas = ['Referee', 'Assistant 1', 'Assistant 2', 'Home Team Initials', 'Away Team Initials']
+    df_matches = df_matches.drop(columns=colunas_excluidas, errors='ignore')
+    df_matches = df_matches.dropna(subset=['Home Team Name'])
+    
+    # --- Desempenho da Equipe ---
+    filtro_brasil = (df_matches['Home Team Name'] == 'Brazil') | (df_matches['Away Team Name'] == 'Brazil')
+    df_brasil_matches = df_matches[filtro_brasil].copy()
+    
+    df_brasil_matches['Gols Feitos'] = df_brasil_matches.apply(
+        lambda x: x['Home Team Goals'] if x['Home Team Name'] == 'Brazil' else x['Away Team Goals'], axis=1
+    )
+    df_brasil_matches['Gols Sofridos'] = df_brasil_matches.apply(
+        lambda x: x['Away Team Goals'] if x['Home Team Name'] == 'Brazil' else x['Home Team Goals'], axis=1
+    )
+    
+    desempenho_equipe = df_brasil_matches.groupby('Year')[['Gols Feitos', 'Gols Sofridos']].sum().reset_index()
+    desempenho_equipe['Saldo de Gols'] = desempenho_equipe['Gols Feitos'] - desempenho_equipe['Gols Sofridos']
+    desempenho_equipe.to_csv(f"{pasta_processed}/desempenho_equipe.csv", index=False)
+    
+    # --- Dependência de Artilheiros ---
+    colunas_excluidas_players = ['Shirt Number', 'Line-up', 'Position']
+    df_players = df_players.drop(columns=colunas_excluidas_players, errors='ignore')
+    
+    df_brasil_players = df_players[df_players['Team Initials'] == 'BRA'].copy()
+    df_brasil_players['Year'] = df_brasil_players['Year'].astype(int)
+    
+    artilheiros_copa = df_brasil_players.groupby('Year')['Goals'].sum().reset_index()
+    artilheiros_copa.rename(columns={'Goals': 'Gols do Artilheiro'}, inplace=True)
+    
+    dependencia = pd.merge(
+        artilheiros_copa,
+        desempenho_equipe[['Year', 'Gols Feitos']],
+        on='Year',
+        how='inner'
+    )
+    dependencia.rename(columns={'Gols Feitos': 'Gols do Time'}, inplace=True)
+    dependencia['Dependência (%)'] = (dependencia['Gols do Artilheiro'] / dependencia['Gols do Time']) * 100
+    dependencia = dependencia[['Year', 'Gols do Time', 'Gols do Artilheiro', 'Dependência (%)']]
+    dependencia.to_csv(f"{pasta_processed}/dependencia_artilheiros.csv", index=False)
+    
+    # --- Disciplina (Cartões) ---
+    # Conta cartões amarelos e vermelhos por copa
+    if 'Yellow Card' in df_brasil_matches.columns and 'Red Card' in df_brasil_matches.columns:
+        cartoes = df_brasil_matches.groupby('Year').agg({
+            'Yellow Card': 'sum',
+            'Red Card': 'sum'
+        }).reset_index()
+        cartoes.columns = ['Year', 'Cartões Amarelos', 'Cartões Vermelhos']
+        cartoes = cartoes.fillna(0).astype({'Cartões Amarelos': int, 'Cartões Vermelhos': int})
+    else:
+        # Fallback se colunas não existem
+        cartoes = desempenho_equipe[['Year']].copy()
+        cartoes['Cartões Amarelos'] = 0
+        cartoes['Cartões Vermelhos'] = 0
+    
+    cartoes.to_csv(f"{pasta_processed}/disciplina_cartoes.csv", index=False)
+
 @st.cache_data
 def carregar_dados():
     caminho_base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'processed'))
@@ -37,10 +152,13 @@ def carregar_dados():
     return df_equipe, df_artilheiros, df_cartoes
 
 try:
+    # Executa o pipeline ETL completo
+    extrair_dados_kaggle()
+    transformar_dados()
     df_equipe, df_artilheiros, df_cartoes = carregar_dados()
     st.session_state['dados_ok'] = True
 except Exception as e:
-    st.error(f"Erro ao carregar dados: {e}")
+    st.error(f"Erro ao processar dados: {e}")
     st.session_state['dados_ok'] = False
 
 #Header, Subtítulo e KPI's
