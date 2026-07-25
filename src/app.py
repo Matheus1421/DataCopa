@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import plotly.graph_objects as go
 import zipfile
+import re
 from dotenv import load_dotenv
 
 st.set_page_config(
@@ -109,21 +110,58 @@ def transformar_dados():
     colunas_excluidas_players = ['Shirt Number', 'Line-up', 'Position']
     df_players = df_players.drop(columns=colunas_excluidas_players, errors='ignore')
     
+    # Adiciona o ano ao dataset de jogadores usando RoundID + MatchID
+    df_players = df_players.merge(
+        df_matches[['RoundID', 'MatchID', 'Year']],
+        on=['RoundID', 'MatchID'],
+        how='left'
+    )
+    if df_players['Year'].isna().any():
+        raise ValueError('Ano não encontrado para alguns registros de jogadores. Verifique RoundID/MatchID.')
+    
     df_brasil_players = df_players[df_players['Team Initials'] == 'BRA'].copy()
     df_brasil_players['Year'] = df_brasil_players['Year'].astype(int)
     
-    artilheiros_copa = df_brasil_players.groupby('Year')['Goals'].sum().reset_index()
-    artilheiros_copa.rename(columns={'Goals': 'Gols do Artilheiro'}, inplace=True)
+    def contar_gols(evento):
+        if pd.isna(evento):
+            return 0
+        return len([m for m in re.findall(r"(?<![A-Z])G\d+'", str(evento))])
+
+    df_brasil_players['Gols na Partida'] = df_brasil_players['Event'].apply(contar_gols)
+    
+    gols_por_jogador = (
+        df_brasil_players.groupby(['Year', 'Player Name'])['Gols na Partida']
+        .sum()
+        .reset_index()
+    )
+    
+    if gols_por_jogador.empty:
+        raise ValueError('Não foi possível extrair gols dos jogadores do Brasil.')
+    
+    max_gols_por_ano = gols_por_jogador.groupby('Year')['Gols na Partida'].transform('max')
+    artilheiros_copa = gols_por_jogador[gols_por_jogador['Gols na Partida'] == max_gols_por_ano].copy()
+    artilheiros_consolidados = artilheiros_copa.groupby('Year').agg({
+        'Player Name': lambda x: ' / '.join(sorted(x.unique())),
+        'Gols na Partida': 'first'
+    }).reset_index()
+    artilheiros_consolidados.rename(columns={
+        'Player Name': 'Artilheiro(s)',
+        'Gols na Partida': 'Gols do Artilheiro'
+    }, inplace=True)
     
     dependencia = pd.merge(
-        artilheiros_copa,
+        artilheiros_consolidados,
         desempenho_equipe[['Year', 'Gols Feitos']],
         on='Year',
         how='inner'
     )
     dependencia.rename(columns={'Gols Feitos': 'Gols do Time'}, inplace=True)
-    dependencia['Dependência (%)'] = (dependencia['Gols do Artilheiro'] / dependencia['Gols do Time']) * 100
-    dependencia = dependencia[['Year', 'Gols do Time', 'Gols do Artilheiro', 'Dependência (%)']]
+    dependencia['Dependência (%)'] = dependencia.apply(
+        lambda row: 0 if row['Gols do Time'] == 0 else (row['Gols do Artilheiro'] / row['Gols do Time']) * 100,
+        axis=1
+    )
+    dependencia = dependencia[['Year', 'Artilheiro(s)', 'Gols do Artilheiro', 'Gols do Time', 'Dependência (%)']]
+    dependencia = dependencia.sort_values('Year')
     dependencia.to_csv(f"{pasta_processed}/dependencia_artilheiros.csv", index=False)
     
     # --- Disciplina (Cartões) ---
@@ -151,10 +189,39 @@ def carregar_dados():
     df_cartoes = pd.read_csv(f"{caminho_base}/disciplina_cartoes.csv")
     return df_equipe, df_artilheiros, df_cartoes
 
+
+def arquivos_processados_existem():
+    diretorio_script = os.path.dirname(os.path.abspath(__file__))
+    diretorio_raiz = os.path.abspath(os.path.join(diretorio_script, '..'))
+    pasta_processed = os.path.join(diretorio_raiz, 'data', 'processed')
+    return all(
+        os.path.exists(os.path.join(pasta_processed, nome))
+        for nome in [
+            'desempenho_equipe.csv',
+            'dependencia_artilheiros.csv',
+            'disciplina_cartoes.csv',
+        ]
+    )
+
+
+def arquivos_brutos_existem():
+    diretorio_script = os.path.dirname(os.path.abspath(__file__))
+    diretorio_raiz = os.path.abspath(os.path.join(diretorio_script, '..'))
+    pasta_raw = os.path.join(diretorio_raiz, 'data', 'raw')
+    return all(
+        os.path.exists(os.path.join(pasta_raw, nome))
+        for nome in [
+            'WorldCupMatches.csv',
+            'WorldCupPlayers.csv',
+            'WorldCups.csv',
+        ]
+    )
+
 try:
-    # Executa o pipeline ETL completo
-    extrair_dados_kaggle()
-    transformar_dados()
+    if not arquivos_processados_existem():
+        if not arquivos_brutos_existem():
+            extrair_dados_kaggle()
+        transformar_dados()
     df_equipe, df_artilheiros, df_cartoes = carregar_dados()
     st.session_state['dados_ok'] = True
 except Exception as e:
